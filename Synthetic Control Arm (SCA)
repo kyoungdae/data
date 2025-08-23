@@ -1,0 +1,133 @@
+
+##############################################
+# EMR 데이터를 다운받아 결과를 readr::read_csv() 로 불러옴
+##############################################
+set.seed(42)
+n <- 100
+
+emr_raw <- tibble(
+  patient_id          = 1:n,
+  birth_year          = sample(1940:2005, n, replace = TRUE),     # 출생년도(실제는 DOB 권장)
+  sex                 = sample(c("M","F","U"), n, replace = TRUE, prob = c(0.48,0.48,0.04)), 
+  diagnosis_date      = sample(seq(as.Date("2015-01-01"), as.Date("2020-12-31"), by = "day"), n, replace = TRUE),
+  # salvage_date: 일부는 NA로 둬서 '우측 검열
+  salvage_date        = ifelse(runif(n) < 0.6, 
+                               sample(seq(as.Date("2016-01-01"), as.Date("2022-12-31"), by = "day"), n, replace = TRUE),
+                               NA) |> as.Date(origin = "1970-01-01"),
+  last_followup_date  = sample(seq(as.Date("2018-01-01"), as.Date("2023-12-31"), by = "day"), n, replace = TRUE),
+  SOC_treatment       = sample(c(0,1,NA), n, replace = TRUE, prob = c(0.45,0.5,0.05)) # 간혹 미기록(NA)
+)
+
+##############################################
+# 2) 기본 품질 점검 (QC)
+#    - 날짜/키 변수 존재 여부
+#    - 비현실적 값(나이 0세, 150세 등)
+#    - 날짜 역전(진단일 이후에 출생? 구제요법이 진단 전?)
+##############################################
+# (A) 필수 컬럼 누락 확인
+required_cols <- c("patient_id","birth_year","sex","diagnosis_date","last_followup_date","SOC_treatment")
+missing_cols  <- setdiff(required_cols, names(emr_raw))
+if (length(missing_cols) > 0) {
+  stop(paste("필수 컬럼 누락:", paste(missing_cols, collapse = ", ")))
+}
+
+# (B) 날짜형으로 보장 (CSV 불러올 때 character로 들어오는 경우 대비)
+emr <- emr_raw %>%
+  mutate(
+    diagnosis_date     = as.Date(diagnosis_date),
+    salvage_date       = as.Date(salvage_date),
+    last_followup_date = as.Date(last_followup_date)
+  )
+
+# (C) 날짜 논리 체크: 진단일 <= (구제요법일, 마지막추적일)
+#     - 어길 경우 데이터 오류 가능: 구제요법일을 NA로, 또는 스왑/재검토 플래그
+emr <- emr %>%
+  mutate(
+    salvage_date = ifelse(!is.na(salvage_date) & salvage_date < diagnosis_date, NA, salvage_date) |> as.Date(origin = "1970-01-01"),
+    # 마지막 추적일이 진단일보다 빠르면, 최소 진단일로 보정 (실무에선 제외/재확인 플래그 권장)
+    last_followup_date = ifelse(last_followup_date < diagnosis_date, diagnosis_date, last_followup_date) |> as.Date(origin = "1970-01-01")
+  )
+
+##############################################
+# 3) 파생변수 생성
+#    - 진단시 나이(age_at_dx)
+#    - 성별 factor 인코딩(sex)
+#    - SOC 치료 여부 인코딩(SOC_treatment)
+#    - 최초 진단 ~ 구제요법(or 검열)의 기간(time_to_salvage) & 이벤트(salvage_event)
+##############################################
+emr <- emr %>%
+  mutate(
+    # 진단시 나이: birth_year만 있다면 diagnosis_year - birth_year (정수 연령)
+    # 실제로는 생년월일(DOB) 기반 floor(interval/years) 권장
+    diagnosis_year = year(diagnosis_date),
+    age_at_dx      = diagnosis_year - birth_year,
+
+    # 성별: M/F 외 'U' (unknown/unclear)를 NA로 처리하거나 "Unknown" 레벨로 유지 (분석 목적에 따라 결정)
+    sex = case_when(
+      sex %in% c("M","F") ~ sex,
+      TRUE                ~ NA_character_
+    ),
+    sex = factor(sex, levels = c("M","F"), labels = c("Male","Female")),
+
+    # SOC 치료 여부: 0/1 외 값은 NA로
+    SOC_treatment = case_when(
+      SOC_treatment %in% c(0,1) ~ SOC_treatment,
+      TRUE                      ~ NA_real_
+    )
+  )
+
+##############################################
+# 4) 생존분석용 기간/이벤트 정의 (구제요법까지의 기간 예시)
+#    - event: 구제요법을 받았으면 1, 없으면 0 (마지막 추적에서 검열)
+#    - time: event==1이면 salvage_date - diagnosis_date, 아니면 last_followup_date - diagnosis_date
+##############################################
+emr <- emr %>%
+  mutate(
+    salvage_event    = ifelse(!is.na(salvage_date), 1L, 0L),
+    # as.numeric(Date - Date)는 일 단위 차이를 줌
+    time_to_event_raw = ifelse(salvage_event == 1L,
+                               as.numeric(salvage_date - diagnosis_date),
+                               as.numeric(last_followup_date - diagnosis_date))
+  )
+
+##############################################
+# 5) 이상치/결측 처리 규칙
+#    - 음수/0 시간 제거(또는 최소 1일로 보정) : 관측 오류 방지
+#    - 비현실적 나이(0~120 범위 밖) NA 처리
+#    - 핵심 공변량 결측 처리 전략(단순 대치 or 모델 대치)
+##############################################
+emr <- emr %>%
+  mutate(
+    time_to_event = ifelse(time_to_event_raw <= 0, NA, time_to_event_raw),
+    age_at_dx     = ifelse(age_at_dx < 0 | age_at_dx > 120, NA, age_at_dx)
+  )
+
+# (선택) 간단 대치 전략 예시
+#  - age_at_dx: 중앙값 대치 (실무에선 다변량 대치(MICE) 고려)
+#  - SOC_treatment: "모름"을 별도 레벨로 두거나(분석 목적상 바이어스 주의), NA 유지 후 완전사례분석
+age_median <- median(emr$age_at_dx, na.rm = TRUE)
+emr <- emr %>%
+  mutate(
+    age_at_dx_imp = ifelse(is.na(age_at_dx), age_median, age_at_dx),
+    SOC_treatment_factor = factor(
+      ifelse(is.na(SOC_treatment), "Unknown", ifelse(SOC_treatment==1,"Yes","No")),
+      levels = c("No","Yes","Unknown")
+    )
+  )
+
+##############################################
+# 6) 최종 분석 데이터셋 확정
+#    - Cox PH에 투입할 컬럼만 정리
+#    - 완전사례(complete-case)만 우선 사용 (실무에선 대치/감도분석 병행)
+##############################################
+analysis_data <- emr %>%
+  transmute(
+    patient_id,
+    age_at_dx      = age_at_dx_imp,         # 대치 사용
+    sex,                                     # factor(Male/Female)
+    SOC_treatment  = SOC_treatment_factor,   # factor(No/Yes/Unknown) - 필요에 따라 Unknown 제외 가능
+    time           = time_to_event,          # 일(day) 단위
+    event          = salvage_event           # 1=구제요법 발생, 0=검열
+  ) %>%
+  # Cox 모델은 time과 event 결측/비양수 불가
+  filter(!is.na(time) & time > 0 & !is.na(event) & !is.na(age_at_dx) & !is.na(sex))
