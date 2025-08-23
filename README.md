@@ -8,6 +8,10 @@ I made this "Github" with data analysis, data engineering records and commentary
 - R 프로그래밍 기반의 데이터 전처리, 생존분석, 머신러닝 모델 개발 전 과정을 주도
 - 다학제 협업(의료진·통계팀) 환경에서 연구 설계 및 분석 전략 수립에 참여
 
+CRO에서 CRA로서 항암 치료 및 의료기기의 허가 임상시험을 담당
+-  5개의 다기관 허가 임상시험 프로젝트 관리
+-  식약처 및 임상시험위원회(IRB) 허가 업무 진행
+
 # 항암 치료 관련 RWE 연구
 활용 기술: R, SQL, NLP, 생존분석, 머신러닝
 
