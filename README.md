@@ -8,7 +8,7 @@ I made this "Github" with data analysis, data engineering records and commentary
 - 다학제 협업(의료진·통계팀) 환경에서 연구 설계 및 분석 전략 수립에 참여
 
 # 항암 치료 관련 RWE 연구
-# 활용 기술: R, SQL, NLP, 생존분석, 머신러닝
+활용 기술: R, SQL, NLP, 생존분석, 머신러닝
 
 데이터 처리
 - 의료기관 보안 규정 준수 → 비식별화 프로세스 설계 및 적용
@@ -21,7 +21,7 @@ I made this "Github" with data analysis, data engineering records and commentary
 - 연구 결과를 통해 임상적 의사결정 보조 가능성 및 후속 연구 필요성 제시
 
 # 희귀암 합성대조군 연구
-# 활용 기술: R, 생존분석, MAIC 분석 기법 적용
+활용 기술: R, 생존분석, MAIC 분석 기법 적용
 
 연구 설계
 - EMR 기반 환자 데이터로 합성대조군(Synthetic Control Arm, SCA) 구축
@@ -34,5 +34,4 @@ I made this "Github" with data analysis, data engineering records and commentary
 - 단일 의료기관 데이터의 표본 규모 한계 → 희귀 질환의 경우 최신 SOC(Standard of Care) 치료 환자군이 소수
 - 이에 따라 합성대조군의 신뢰도 및 일반화 가능성에 제한 존재
 
-# 본 프로젝트는 민감한 의료 데이터를 다루었으므로, 데이터의 기밀성 및 환자 정보 보호를 위해 상세한 코드와 원본 데이터는 공개할 수 없음을 양해 바랍니다.
-# 프로젝트의 방법론과 성과는 일반적인 형태로 기술되었습니다.
+# 본 프로젝트는 민감한 의료 데이터를 다루었으므로, 데이터의 기밀성 및 환자 정보 보호를 위해 상세한 코드와 원본 데이터는 공개할 수 없음을 양해 바랍니다. 프로젝트의 방법론과 성과는 일반적인 형태로 기술되었습니다.
