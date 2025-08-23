@@ -103,7 +103,7 @@ emr <- emr %>%
     age_at_dx     = ifelse(age_at_dx < 0 | age_at_dx > 120, NA, age_at_dx)
   )
 
-# (선택) 간단 대치 전략 예시
+# 간단한 대치 전략 예시
 #  - age_at_dx: 중앙값 대치 (실무에선 다변량 대치(MICE) 고려)
 #  - SOC_treatment: "모름"을 별도 레벨로 두거나(분석 목적상 바이어스 주의), NA 유지 후 완전사례분석
 age_median <- median(emr$age_at_dx, na.rm = TRUE)
