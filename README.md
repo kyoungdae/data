@@ -1,6 +1,7 @@
 # data
 I made this "Github" with data analysis, data engineering records and commentary, and some ideas that I've been doing.
 
+
 # 공통 경험
 모 대학병원 연구원으로서 EMR 기반 항암치료 환자 생존 분석 및 머신러닝 모델 개발 (RWE 연구)
 - 병원 EMR 데이터를 활용하여 항암 치료 효과 분석 및 RWE 연구 수행
