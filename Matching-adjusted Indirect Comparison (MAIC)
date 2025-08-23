@@ -1,0 +1,68 @@
+
+# -------------------------------
+# 1. 가상의 데이터 생성
+# -------------------------------
+# A군 (IPD)
+n_A <- 200
+A <- data.frame(
+  age = rnorm(n_A, mean = 60, sd = 8),      # 진단 시 나이
+  sex = rbinom(n_A, 1, 0.5),                # 성별 (0=여, 1=남)
+  soc = rbinom(n_A, 1, 0.6),                # SOC 치료 여부
+  gap = rnorm(n_A, mean = 12, sd = 4)       # 최초 진단-구제요법 간격 (개월)
+)
+
+# B군 (Aggregate summary 정보만 존재한다고 가정)
+B_summary <- list(
+  age = 63,   # 평균 나이
+  sex = 0.6,  # 남성 비율
+  soc = 0.7,  # SOC 치료 비율
+  gap = 10    # 평균 gap
+)
+
+# -------------------------------
+# 2. A군 vs B군 매칭용 "pseudo dataset" 생성
+# -------------------------------
+# A군 데이터에는 label=1, B군 target에는 label=0
+# B군은 summary만 있으므로, 가상의 환자 200명을 summary 값 기준으로 생성
+n_B <- 200
+B <- data.frame(
+  age = rnorm(n_B, mean = B_summary$age, sd = 8),
+  sex = rbinom(n_B, 1, B_summary$sex),
+  soc = rbinom(n_B, 1, B_summary$soc),
+  gap = rnorm(n_B, mean = B_summary$gap, sd = 4),
+  label = 0
+)
+
+A$label <- 1
+
+# 두 그룹 합치기
+dat <- rbind(A, B)
+
+# -------------------------------
+# 3. Propensity Score 모델 학습
+# -------------------------------
+# "대상자가 A군일 확률" = logistic regression
+ps_model <- glm(label ~ age + sex + soc + gap,
+                data = dat, family = binomial)
+
+summary(ps_model)
+
+# A군 개별 환자에 대해 Propensity Score 예측
+A$ps <- predict(ps_model, newdata = A, type = "response")
+
+# -------------------------------
+# 4. 가중치 계산 (IPW)
+# -------------------------------
+# B군과 유사하게 만들기 위해서, propensity score의 inverse를 가중치로 사용
+A$weight <- 1 / A$ps
+
+# -------------------------------
+# 5. 가중치 적용 후 공변량 분포 비교
+# -------------------------------
+weighted_means <- A %>%
+  summarise(
+    age = weighted.mean(age, weight),
+    sex = weighted.mean(sex, weight),
+    soc = weighted.mean(soc, weight),
+    gap = weighted.mean(gap, weight)
+  )
